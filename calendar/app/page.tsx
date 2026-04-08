@@ -16,11 +16,13 @@ export default function Home() {
             Interactive Wall Calendar
           </h1>
           <p className="max-w-2xl text-sm leading-6 text-white/80 lg:hidden">
-            Select a start date and an end date to create a range, then attach notes to the
-            month or the selected range. Everything saves to your browser (localStorage).
+            Default is <span className="font-semibold text-white">Notes</span> mode: tap a date and
+            hit <span className="font-semibold text-white">+</span> to add a titled note. Toggle to{" "}
+            <span className="font-semibold text-white">Range</span> only when you want range
+            selection. Everything saves to your browser (localStorage).
           </p>
           <p className="hidden text-sm text-white/70 lg:block">
-            Select a range • Add notes • Saved locally
+            Dated notes • Optional range • Saved locally
           </p>
         </header>
 

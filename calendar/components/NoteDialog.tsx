@@ -10,8 +10,10 @@ export type NoteDraft = {
   description: string;
 };
 
+export type NoteDialogPhase = "open" | "closing" | "closed";
+
 export type NoteDialogProps = {
-  open: boolean;
+  phase: NoteDialogPhase;
   draft: NoteDraft;
   onChange: (next: NoteDraft) => void;
   onClose: () => void;
@@ -36,7 +38,7 @@ function generateId(): string {
 }
 
 export default function NoteDialog({
-  open,
+  phase,
   draft,
   onChange,
   onClose,
@@ -44,13 +46,15 @@ export default function NoteDialog({
   onDelete,
 }: NoteDialogProps) {
   const titleInputRef = useRef<HTMLInputElement | null>(null);
+  const isOpen = phase === "open";
+  const isClosing = phase === "closing";
 
   const canSave = useMemo(() => {
     return isCanonicalIsoDate(draft.dateIso) && draft.title.trim().length > 0;
   }, [draft.dateIso, draft.title]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!isOpen) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -58,29 +62,38 @@ export default function NoteDialog({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose, open]);
+  }, [isOpen, onClose]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!isOpen) return;
     const handle = window.setTimeout(() => titleInputRef.current?.focus(), 0);
     return () => window.clearTimeout(handle);
-  }, [open]);
+  }, [isOpen]);
 
-  if (!open) return null;
+  if (phase === "closed") return null;
 
   const isEditing = Boolean(draft.id);
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+      className={clsx(
+        "fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm",
+        isClosing ? "wc-modal-overlay-out" : "wc-modal-overlay-in",
+      )}
       onMouseDown={(e) => {
+        if (isClosing) return;
         if (e.target === e.currentTarget) onClose();
       }}
       role="dialog"
       aria-modal="true"
       aria-label={isEditing ? "Edit note" : "Add note"}
     >
-      <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-white/5 p-5 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_30px_80px_rgba(0,0,0,0.75)] backdrop-blur">
+      <div
+        className={clsx(
+          "w-full max-w-lg rounded-3xl border border-white/10 bg-white/5 p-5 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_30px_80px_rgba(0,0,0,0.75)] backdrop-blur",
+          isClosing ? "wc-modal-out" : "wc-modal-in",
+        )}
+      >
         <div className="mb-4 flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h3 className="text-lg font-semibold tracking-tight">
@@ -94,6 +107,7 @@ export default function NoteDialog({
             type="button"
             className="shrink-0 rounded-full bg-white/10 px-3 py-2 text-sm font-medium text-white shadow-sm ring-1 ring-white/10 transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FFFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#05010A]"
             onClick={onClose}
+            disabled={isClosing}
           >
             Close
           </button>
@@ -106,6 +120,7 @@ export default function NoteDialog({
               type="date"
               value={draft.dateIso}
               onChange={(e) => onChange({ ...draft, dateIso: e.target.value })}
+              disabled={isClosing}
               className={clsx(
                 "w-full rounded-2xl border bg-black/20 px-3 py-2 text-sm text-white shadow-sm outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-offset-[#05010A]",
                 isCanonicalIsoDate(draft.dateIso)
@@ -123,6 +138,7 @@ export default function NoteDialog({
               type="text"
               value={draft.title}
               onChange={(e) => onChange({ ...draft, title: e.target.value })}
+              disabled={isClosing}
               placeholder="e.g., Hiking plan"
               className="w-full rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white shadow-sm outline-none ring-offset-2 placeholder:text-white/40 focus-visible:ring-2 focus-visible:ring-[#00FFFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#05010A]"
             />
@@ -133,6 +149,7 @@ export default function NoteDialog({
             <textarea
               value={draft.description}
               onChange={(e) => onChange({ ...draft, description: e.target.value })}
+              disabled={isClosing}
               placeholder="Details…"
               rows={4}
               className="w-full resize-y rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white shadow-sm outline-none ring-offset-2 placeholder:text-white/40 focus-visible:ring-2 focus-visible:ring-[#00FFFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#05010A]"
@@ -147,6 +164,7 @@ export default function NoteDialog({
                 type="button"
                 className="rounded-full bg-[#FF1493]/15 px-4 py-2 text-sm font-semibold text-[#FF1493] ring-1 ring-[#FF1493]/25 transition hover:bg-[#FF1493]/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF1493] focus-visible:ring-offset-2 focus-visible:ring-offset-[#05010A]"
                 onClick={() => onDelete(draft.id!)}
+                disabled={isClosing}
               >
                 Delete
               </button>
@@ -158,15 +176,16 @@ export default function NoteDialog({
               type="button"
               className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white shadow-sm ring-1 ring-white/10 transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FFFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#05010A]"
               onClick={onClose}
+              disabled={isClosing}
             >
               Cancel
             </button>
             <button
               type="button"
-              disabled={!canSave}
+              disabled={!canSave || isClosing}
               className="rounded-full bg-[linear-gradient(135deg,#FF1493_0%,#8338EC_55%,#00FFFF_100%)] px-4 py-2 text-sm font-semibold text-[#05010A] shadow-[0_0_18px_rgba(255,20,147,0.28),0_0_22px_rgba(0,255,255,0.2)] ring-1 ring-white/10 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FFFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#05010A]"
               onClick={() => {
-                if (!canSave) return;
+                if (!canSave || isClosing) return;
                 const id = draft.id ?? generateId();
                 onSave({
                   ...draft,
@@ -183,4 +202,3 @@ export default function NoteDialog({
     </div>
   );
 }
-

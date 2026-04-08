@@ -1,10 +1,11 @@
 "use client";
 
 import clsx from "clsx";
-import { addDays, addMonths, format, parseISO, startOfMonth } from "date-fns";
+import { addDays, format, parseISO, startOfMonth } from "date-fns";
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import MonthYearPicker from "@/components/MonthYearPicker";
 import NoteDialog, { type NoteDraft } from "@/components/NoteDialog";
 import {
   getMonthGrid,
@@ -61,18 +62,17 @@ export default function WallCalendar({
   const [hoverIso, setHoverIso] = useState<IsoDate | undefined>(undefined);
   const [activeDayIso, setActiveDayIso] = useState<IsoDate | undefined>(undefined);
   const [noteDraft, setNoteDraft] = useState<NoteDraft | null>(null);
+  const [noteDialogPhase, setNoteDialogPhase] = useState<"open" | "closing" | "closed">("closed");
   const closeDialogTimeoutRef = useRef<number | null>(null);
   const monthAnimTimeoutRef = useRef<number | null>(null);
-  const navFxTimeoutRef = useRef<number | null>(null);
-  const [navFx, setNavFx] = useState<{ key: MonthAnimDir; token: number } | null>(null);
-  const todayPulseTimeoutRef = useRef<number | null>(null);
-  const [todayPulse, setTodayPulse] = useState<{ active: boolean; token: number }>({
-    active: false,
-    token: 0,
-  });
   const noteFxTimeoutRef = useRef<number | null>(null);
   const [noteFx, setNoteFx] = useState<{ id: string; token: number; action: "create" | "edit" } | null>(null);
   const [deletingNoteIds, setDeletingNoteIds] = useState<Record<string, true>>({});
+  const [todayPulseToken, setTodayPulseToken] = useState(() => {
+    const now = new Date();
+    const initial = startOfMonth(initialMonth ?? now);
+    return initial.getFullYear() === now.getFullYear() && initial.getMonth() === now.getMonth() ? 1 : 0;
+  });
 
   const computedHero = useMemo(() => getHeroForMonth(viewMonth.getMonth()), [viewMonth]);
   const effectiveHeroSrc = heroSrc ?? computedHero.src;
@@ -124,11 +124,10 @@ export default function WallCalendar({
     return `Selected ${formatShort(min)} – ${formatShort(max)}.`;
   }, [range.endIso, range.startIso]);
 
-  useEffect(() => {
-    if (mode === "range") return;
-    setRange({});
-    setHoverIso(undefined);
-  }, [mode]);
+  const isViewingCurrentMonth = useMemo(() => {
+    const now = new Date();
+    return viewMonth.getFullYear() === now.getFullYear() && viewMonth.getMonth() === now.getMonth();
+  }, [viewMonth]);
 
   useEffect(() => {
     return () => {
@@ -140,20 +139,20 @@ export default function WallCalendar({
         window.clearTimeout(monthAnimTimeoutRef.current);
         monthAnimTimeoutRef.current = null;
       }
-      if (navFxTimeoutRef.current) {
-        window.clearTimeout(navFxTimeoutRef.current);
-        navFxTimeoutRef.current = null;
-      }
-      if (todayPulseTimeoutRef.current) {
-        window.clearTimeout(todayPulseTimeoutRef.current);
-        todayPulseTimeoutRef.current = null;
-      }
       if (noteFxTimeoutRef.current) {
         window.clearTimeout(noteFxTimeoutRef.current);
         noteFxTimeoutRef.current = null;
       }
     };
   }, []);
+
+  function switchMode(nextMode: "notes" | "range") {
+    setMode(nextMode);
+    if (nextMode === "notes") {
+      setRange({});
+      setHoverIso(undefined);
+    }
+  }
 
   function monthInClass(dir: MonthAnimDir): string {
     if (dir === "prev") return "wc-month-in-prev";
@@ -167,28 +166,6 @@ export default function WallCalendar({
     return "wc-month-out-next";
   }
 
-  function triggerNavFx(key: MonthAnimDir) {
-    setNavFx((prev) => ({ key, token: (prev?.token ?? 0) + 1 }));
-    if (navFxTimeoutRef.current) {
-      window.clearTimeout(navFxTimeoutRef.current);
-    }
-    navFxTimeoutRef.current = window.setTimeout(() => {
-      setNavFx(null);
-      navFxTimeoutRef.current = null;
-    }, 320);
-  }
-
-  function triggerTodayPulse() {
-    setTodayPulse((prev) => ({ active: true, token: prev.token + 1 }));
-    if (todayPulseTimeoutRef.current) {
-      window.clearTimeout(todayPulseTimeoutRef.current);
-    }
-    todayPulseTimeoutRef.current = window.setTimeout(() => {
-      setTodayPulse((prev) => ({ ...prev, active: false }));
-      todayPulseTimeoutRef.current = null;
-    }, 700);
-  }
-
   function startMonthTransition(targetMonth: Date, dir: MonthAnimDir) {
     if (monthAnimTimeoutRef.current) {
       window.clearTimeout(monthAnimTimeoutRef.current);
@@ -196,6 +173,10 @@ export default function WallCalendar({
     }
 
     const nextMonth = startOfMonth(targetMonth);
+    const now = new Date();
+    if (nextMonth.getFullYear() === now.getFullYear() && nextMonth.getMonth() === now.getMonth()) {
+      setTodayPulseToken((prev) => prev + 1);
+    }
     setMonthAnim((prev) => ({
       active: true,
       dir,
@@ -206,17 +187,24 @@ export default function WallCalendar({
     setRange({});
     setHoverIso(undefined);
     setActiveDayIso(undefined);
+    forceCloseNoteDialog();
 
     monthAnimTimeoutRef.current = window.setTimeout(() => {
       setMonthAnim((prev) => ({ ...prev, active: false, prevMonth: undefined }));
       monthAnimTimeoutRef.current = null;
-    }, 520);
+    }, 700);
   }
 
-  function goToToday() {
-    triggerNavFx("today");
-    triggerTodayPulse();
-    startMonthTransition(new Date(), "today");
+  function jumpToMonthYear(year: number, monthIndex: number) {
+    if (!Number.isFinite(year) || !Number.isFinite(monthIndex)) return;
+    if (monthIndex < 0 || monthIndex > 11) return;
+
+    const currentKey = viewMonth.getFullYear() * 12 + viewMonth.getMonth();
+    const targetKey = year * 12 + monthIndex;
+    const dir: MonthAnimDir =
+      targetKey === currentKey ? "today" : targetKey > currentKey ? "next" : "prev";
+
+    startMonthTransition(new Date(year, monthIndex, 1), dir);
   }
 
   function clearSelection() {
@@ -224,9 +212,42 @@ export default function WallCalendar({
     setHoverIso(undefined);
   }
 
+  function openNoteDialog(draft: NoteDraft) {
+    if (closeDialogTimeoutRef.current) {
+      window.clearTimeout(closeDialogTimeoutRef.current);
+      closeDialogTimeoutRef.current = null;
+    }
+    setNoteDraft(draft);
+    setNoteDialogPhase("open");
+  }
+
+  function closeNoteDialog() {
+    if (noteDialogPhase === "closed") return;
+    if (closeDialogTimeoutRef.current) {
+      window.clearTimeout(closeDialogTimeoutRef.current);
+      closeDialogTimeoutRef.current = null;
+    }
+
+    setNoteDialogPhase("closing");
+    closeDialogTimeoutRef.current = window.setTimeout(() => {
+      setNoteDialogPhase("closed");
+      setNoteDraft(null);
+      closeDialogTimeoutRef.current = null;
+    }, 200);
+  }
+
+  function forceCloseNoteDialog() {
+    if (closeDialogTimeoutRef.current) {
+      window.clearTimeout(closeDialogTimeoutRef.current);
+      closeDialogTimeoutRef.current = null;
+    }
+    setNoteDialogPhase("closed");
+    setNoteDraft(null);
+  }
+
   function openCreateNote() {
     const defaultDateIso = activeDayIso ?? (format(startOfMonth(viewMonth), "yyyy-MM-dd") as IsoDate);
-    setNoteDraft({
+    openNoteDialog({
       dateIso: defaultDateIso,
       title: "",
       description: "",
@@ -234,7 +255,7 @@ export default function WallCalendar({
   }
 
   function openEditNote(note: CalendarNote) {
-    setNoteDraft({
+    openNoteDialog({
       id: note.id,
       dateIso: note.dateIso,
       title: note.title,
@@ -247,6 +268,7 @@ export default function WallCalendar({
 
     const dateIso = note.dateIso as IsoDate;
     const now = Date.now();
+    const action: "create" | "edit" = data.datedNotes.some((n) => n.id === note.id) ? "edit" : "create";
 
     setData((prev) => {
       const existing = prev.datedNotes.find((n) => n.id === note.id);
@@ -273,12 +295,36 @@ export default function WallCalendar({
       return { ...prev, datedNotes: nextNotes };
     });
 
-    setNoteDraft(null);
+    setNoteFx((prev) => ({
+      id: note.id,
+      token: (prev?.token ?? 0) + 1,
+      action,
+    }));
+    if (noteFxTimeoutRef.current) {
+      window.clearTimeout(noteFxTimeoutRef.current);
+      noteFxTimeoutRef.current = null;
+    }
+    noteFxTimeoutRef.current = window.setTimeout(() => {
+      setNoteFx(null);
+      noteFxTimeoutRef.current = null;
+    }, 650);
+
+    closeNoteDialog();
   }
 
   function deleteDatedNote(noteId: string) {
-    setData((prev) => ({ ...prev, datedNotes: prev.datedNotes.filter((n) => n.id !== noteId) }));
-    setNoteDraft(null);
+    if (deletingNoteIds[noteId]) return;
+    setDeletingNoteIds((prev) => ({ ...prev, [noteId]: true }));
+    closeNoteDialog();
+
+    window.setTimeout(() => {
+      setData((prev) => ({ ...prev, datedNotes: prev.datedNotes.filter((n) => n.id !== noteId) }));
+      setDeletingNoteIds((prev) => {
+        const next = { ...prev };
+        delete next[noteId];
+        return next;
+      });
+    }, 220);
   }
 
   function onDayClick(dayIso: IsoDate) {
@@ -303,6 +349,7 @@ export default function WallCalendar({
             <div className="absolute inset-0">
               {prevHero ? (
                 <div
+                  key={`hero-out-${monthAnim.token}`}
                   aria-hidden="true"
                   className={clsx(
                     "absolute inset-0 z-0 pointer-events-none",
@@ -319,6 +366,7 @@ export default function WallCalendar({
                 </div>
               ) : null}
               <div
+                key={`hero-in-${monthAnim.token}`}
                 className={clsx(
                   "absolute inset-0 z-10",
                   monthAnim.active && monthInClass(monthAnim.dir),
@@ -345,46 +393,6 @@ export default function WallCalendar({
                   {format(viewMonth, "MMMM yyyy")}
                 </h2>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  className={clsx(
-                    "rounded-full bg-white/10 px-3 py-2 text-sm font-medium text-white shadow-sm ring-1 ring-white/10 transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FFFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#05010A]",
-                    navFx?.key === "prev" && "wc-glitch-jitter",
-                  )}
-                  onClick={() => {
-                    triggerNavFx("prev");
-                    startMonthTransition(addMonths(viewMonth, -1), "prev");
-                  }}
-                  aria-label="Previous month"
-                >
-                  Prev
-                </button>
-                <button
-                  type="button"
-                  className={clsx(
-                    "rounded-full bg-white/10 px-3 py-2 text-sm font-medium text-white shadow-sm ring-1 ring-white/10 transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FFFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#05010A]",
-                    navFx?.key === "today" && "wc-glitch-jitter",
-                  )}
-                  onClick={goToToday}
-                >
-                  Today
-                </button>
-                <button
-                  type="button"
-                  className={clsx(
-                    "rounded-full bg-white/10 px-3 py-2 text-sm font-medium text-white shadow-sm ring-1 ring-white/10 transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FFFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#05010A]",
-                    navFx?.key === "next" && "wc-glitch-jitter",
-                  )}
-                  onClick={() => {
-                    triggerNavFx("next");
-                    startMonthTransition(addMonths(viewMonth, 1), "next");
-                  }}
-                  aria-label="Next month"
-                >
-                  Next
-                </button>
-              </div>
             </div>
           </div>
         </div>
@@ -392,7 +400,7 @@ export default function WallCalendar({
         <div className="flex flex-col gap-4 lg:col-span-7 lg:h-full lg:min-h-0">
           <div className="flex flex-col overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-4 shadow-sm sm:p-5 lg:min-h-0 lg:flex-[3] lg:p-4">
             <div className="mb-3 flex flex-wrap items-start justify-between gap-3 lg:mb-2">
-              <div>
+              <div className="min-w-0">
                 <h3 className="text-lg font-semibold text-white">
                   {mode === "range" ? "Select a date range" : "Notes mode"}
                 </h3>
@@ -407,7 +415,9 @@ export default function WallCalendar({
                   </p>
                 )}
               </div>
-              <div className="flex items-center gap-2">
+
+              <div className="flex flex-wrap items-center gap-2">
+                <MonthYearPicker value={viewMonth} onChange={jumpToMonthYear} />
                 <div
                   role="group"
                   aria-label="Selection mode"
@@ -416,9 +426,9 @@ export default function WallCalendar({
                   <button
                     type="button"
                     aria-pressed={mode === "notes"}
-                    onClick={() => setMode("notes")}
+                    onClick={() => switchMode("notes")}
                     className={clsx(
-                      "rounded-full px-3 py-1.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FFFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#05010A]",
+                      "rounded-full px-3 py-1.5 text-sm font-semibold transition duration-150 ease-out active:scale-[0.98] motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FFFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#05010A]",
                       mode === "notes"
                         ? "bg-[linear-gradient(135deg,#FF1493_0%,#8338EC_55%,#00FFFF_100%)] text-[#05010A] shadow-sm"
                         : "text-white/80 hover:bg-white/10",
@@ -429,9 +439,9 @@ export default function WallCalendar({
                   <button
                     type="button"
                     aria-pressed={mode === "range"}
-                    onClick={() => setMode("range")}
+                    onClick={() => switchMode("range")}
                     className={clsx(
-                      "rounded-full px-3 py-1.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FFFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#05010A]",
+                      "rounded-full px-3 py-1.5 text-sm font-semibold transition duration-150 ease-out active:scale-[0.98] motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FFFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#05010A]",
                       mode === "range"
                         ? "bg-[linear-gradient(135deg,#FF1493_0%,#8338EC_55%,#00FFFF_100%)] text-[#05010A] shadow-sm"
                         : "text-white/80 hover:bg-white/10",
@@ -444,7 +454,7 @@ export default function WallCalendar({
                 {mode === "range" ? (
                   <button
                     type="button"
-                    className="rounded-full border border-white/10 bg-white/10 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FFFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#05010A]"
+                    className="rounded-full border border-white/10 bg-white/10 px-3 py-2 text-sm font-medium text-white shadow-sm transition duration-150 ease-out hover:bg-white/15 active:scale-[0.98] motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FFFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#05010A]"
                     onClick={clearSelection}
                     disabled={!range.startIso}
                   >
@@ -454,73 +464,123 @@ export default function WallCalendar({
               </div>
             </div>
 
-            <div
-              className="mt-2 grid grid-cols-7 gap-2 lg:flex-1 lg:min-h-0 lg:grid-rows-[auto_repeat(6,minmax(0,1fr))] lg:gap-1"
-              onMouseLeave={() => setHoverIso(undefined)}
-            >
-              {weekdayLabels.map((label) => (
+            <div className="relative mt-2 overflow-hidden lg:flex-1 lg:min-h-0">
+              {prevGrid ? (
                 <div
-                  key={label}
-                  className="py-1 text-center text-xs font-medium tracking-wide text-white/60"
-                  onMouseEnter={() => setHoverIso(undefined)}
+                  key={`grid-out-${monthAnim.token}`}
+                  aria-hidden="true"
+                  className={clsx(
+                    "absolute inset-0 z-0 grid h-full grid-cols-7 gap-2 pointer-events-none lg:grid-rows-[auto_repeat(6,minmax(0,1fr))] lg:gap-1",
+                    monthOutClass(monthAnim.dir),
+                  )}
                 >
-                  {label}
+                  {weekdayLabels.map((label) => (
+                    <div
+                      key={`prev-${label}`}
+                      className="py-1 text-center text-xs font-medium tracking-wide text-white/60"
+                    >
+                      {label}
+                    </div>
+                  ))}
+
+                  {prevGrid.flat().map((cell) => (
+                    <div
+                      key={cell.iso}
+                      className={clsx(
+                        "relative flex h-11 w-full select-none items-center justify-center rounded-2xl text-sm font-semibold tabular-nums leading-none lg:h-full lg:rounded-xl lg:text-xs",
+                        cell.inCurrentMonth ? "text-white/70" : "text-white/30",
+                      )}
+                    >
+                      <span>{format(cell.date, "d")}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : null}
 
-              {grid.flat().map((cell) => {
-                const visual =
-                  mode === "range"
-                    ? getRangeVisualState(cell.iso, range, hoverIso)
-                    : { isStart: false, isEnd: false, isInRange: false, isPreview: false };
-                const isSelected = visual.isStart || visual.isEnd || visual.isInRange;
-                const noteCount = notesByDate[cell.iso]?.length ?? 0;
-                const ariaLabel =
-                  noteCount > 0
-                    ? `${dayLabel(cell.date)}, ${noteCount} ${noteCount === 1 ? "note" : "notes"}`
-                    : dayLabel(cell.date);
-
-                return (
-                  <button
-                    key={cell.iso}
-                    type="button"
-                    onClick={() => onDayClick(cell.iso)}
-                    onMouseEnter={() => {
-                      if (mode === "range" && range.startIso && !range.endIso) setHoverIso(cell.iso);
-                    }}
-                    aria-label={ariaLabel}
-                    aria-pressed={mode === "range" ? isSelected : undefined}
-                    aria-current={cell.isToday ? "date" : undefined}
-                    data-range-start={visual.isStart ? "true" : undefined}
-                    data-range-end={visual.isEnd ? "true" : undefined}
-                    data-range-in={visual.isInRange ? "true" : undefined}
-                    className={clsx(
-                      "relative flex h-11 w-full select-none items-center justify-center rounded-2xl text-sm font-semibold tabular-nums leading-none transition lg:h-full lg:rounded-xl lg:text-xs",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FFFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#05010A]",
-                      cell.inCurrentMonth
-                        ? "text-white/90 hover:bg-white/10"
-                        : "text-white/40 hover:bg-white/5",
-                      visual.isPreview &&
-                        !range.endIso &&
-                        "bg-[#00FFFF]/10 ring-1 ring-[#00FFFF]/30 shadow-[0_0_0_1px_rgba(0,255,255,0.15)]",
-                      visual.isInRange && "bg-[#FF1493]/15 ring-1 ring-[#FF1493]/20",
-                      (visual.isStart || visual.isEnd) &&
-                        "bg-[linear-gradient(135deg,#FF1493_0%,#8338EC_55%,#00FFFF_100%)] text-[#05010A] shadow-sm ring-1 ring-white/10 hover:brightness-110",
-                    )}
+              <div
+                key={`grid-in-${monthAnim.token}`}
+                className={clsx(
+                  "relative z-10 grid h-full grid-cols-7 gap-2 lg:grid-rows-[auto_repeat(6,minmax(0,1fr))] lg:gap-1",
+                  monthAnim.active && monthInClass(monthAnim.dir),
+                )}
+                onMouseLeave={() => setHoverIso(undefined)}
+              >
+                {weekdayLabels.map((label) => (
+                  <div
+                    key={label}
+                    className="py-1 text-center text-xs font-medium tracking-wide text-white/60"
+                    onMouseEnter={() => setHoverIso(undefined)}
                   >
-                    <span className="relative z-10">{format(cell.date, "d")}</span>
-                    {noteCount > 0 && (
-                      <span
-                        aria-hidden="true"
-                        className="pointer-events-none absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#FFD60A] shadow-[0_0_10px_rgba(255,214,10,0.6)]"
-                      />
-                    )}
-                    {cell.isToday && (
-                      <span className="absolute bottom-1.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-current opacity-70" />
-                    )}
-                  </button>
-                );
-              })}
+                    {label}
+                  </div>
+                ))}
+
+                {grid.flat().map((cell) => {
+                  const visual =
+                    mode === "range"
+                      ? getRangeVisualState(cell.iso, range, hoverIso)
+                      : { isStart: false, isEnd: false, isInRange: false, isPreview: false };
+                  const isSelected = visual.isStart || visual.isEnd || visual.isInRange;
+                  const noteCount = notesByDate[cell.iso]?.length ?? 0;
+                  const ariaLabel =
+                    noteCount > 0
+                      ? `${dayLabel(cell.date)}, ${noteCount} ${noteCount === 1 ? "note" : "notes"}`
+                      : dayLabel(cell.date);
+
+                  return (
+                    <button
+                      key={cell.iso}
+                      type="button"
+                      onClick={() => onDayClick(cell.iso)}
+                      onMouseEnter={() => {
+                        if (mode === "range" && range.startIso && !range.endIso) setHoverIso(cell.iso);
+                      }}
+                      aria-label={ariaLabel}
+                      aria-pressed={mode === "range" ? isSelected : undefined}
+                      aria-current={cell.isToday ? "date" : undefined}
+                      data-range-start={visual.isStart ? "true" : undefined}
+                      data-range-end={visual.isEnd ? "true" : undefined}
+                      data-range-in={visual.isInRange ? "true" : undefined}
+                      className={clsx(
+                        "relative flex h-11 w-full select-none items-center justify-center rounded-2xl text-sm font-semibold tabular-nums leading-none transition duration-150 ease-out active:scale-[0.98] motion-reduce:transition-none lg:h-full lg:rounded-xl lg:text-xs",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FFFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#05010A]",
+                        cell.inCurrentMonth
+                          ? "text-white/90 hover:bg-white/10"
+                          : "text-white/40 hover:bg-white/5",
+                        visual.isPreview &&
+                          !range.endIso &&
+                          "bg-[#00FFFF]/10 ring-1 ring-[#00FFFF]/30 shadow-[0_0_0_1px_rgba(0,255,255,0.15)]",
+                        visual.isInRange && "bg-[#FF1493]/15 ring-1 ring-[#FF1493]/20",
+                        (visual.isStart || visual.isEnd) &&
+                          "bg-[linear-gradient(135deg,#FF1493_0%,#8338EC_55%,#00FFFF_100%)] text-[#05010A] shadow-sm ring-1 ring-white/10 hover:brightness-110",
+                      )}
+                    >
+                      {cell.isToday ? (
+                        <>
+                          <span
+                            aria-hidden="true"
+                            className="pointer-events-none absolute inset-1 rounded-2xl ring-1 ring-[#00FFFF]/35 shadow-[0_0_0_1px_rgba(0,255,255,0.22),0_0_16px_rgba(0,255,255,0.18),0_0_18px_rgba(255,20,147,0.12)] lg:rounded-xl"
+                          />
+                          {isViewingCurrentMonth ? (
+                            <span
+                              key={`today-pulse-${todayPulseToken}`}
+                              aria-hidden="true"
+                              className="pointer-events-none absolute inset-1 rounded-2xl wc-today-pulse lg:rounded-xl"
+                            />
+                          ) : null}
+                        </>
+                      ) : null}
+                      <span className="relative z-10">{format(cell.date, "d")}</span>
+                      {noteCount > 0 && (
+                        <span
+                          aria-hidden="true"
+                          className="pointer-events-none absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#FFD60A] shadow-[0_0_10px_rgba(255,214,10,0.6)]"
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
@@ -538,7 +598,7 @@ export default function WallCalendar({
               <button
                 type="button"
                 aria-label="Add note"
-                className="shrink-0 rounded-full bg-white/10 px-3 py-2 text-sm font-semibold text-white shadow-sm ring-1 ring-white/10 transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FFFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#05010A]"
+                className="shrink-0 rounded-full bg-white/10 px-3 py-2 text-sm font-semibold text-white shadow-sm ring-1 ring-white/10 transition duration-150 ease-out hover:bg-white/15 active:scale-[0.98] motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FFFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#05010A]"
                 onClick={openCreateNote}
               >
                 <span aria-hidden="true">+</span>
@@ -552,27 +612,31 @@ export default function WallCalendar({
                 </div>
               ) : (
                 <ul className="space-y-3">
-                  {visibleNotes.map((note) => (
-                    <li key={note.id}>
-                      <button
-                        type="button"
-                        onClick={() => openEditNote(note)}
-                        className="w-full rounded-2xl border border-white/10 bg-black/20 p-4 text-left transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FFFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#05010A]"
-                      >
-                        <p className="text-xs font-medium text-white/70">
-                          {format(parseISO(note.dateIso), "MMM d, yyyy")}
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-white">
-                          {note.title}
-                        </p>
-                        {note.description.trim().length > 0 ? (
-                          <p className="mt-1 whitespace-pre-wrap text-sm text-white/70">
-                            {note.description}
+                  {visibleNotes.map((note) => {
+                    const isDeleting = deletingNoteIds[note.id] === true;
+                    const fxToken = noteFx?.id === note.id ? noteFx.token : 0;
+                    const shouldPop = noteFx?.id === note.id && !isDeleting;
+
+                    return (
+                      <li key={`${note.id}-${fxToken}`}>
+                        <button
+                          type="button"
+                          onClick={() => openEditNote(note)}
+                          aria-label={`${format(parseISO(note.dateIso), "MMM d, yyyy")}: ${note.title}`}
+                          className={clsx(
+                            "w-full rounded-2xl border border-white/10 bg-black/20 p-4 text-left transition duration-150 ease-out hover:bg-white/10 active:scale-[0.99] motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00FFFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#05010A]",
+                            shouldPop && "wc-note-pop",
+                            isDeleting && "pointer-events-none wc-note-delete",
+                          )}
+                        >
+                          <p className="text-xs font-medium text-white/70">
+                            {format(parseISO(note.dateIso), "MMM d, yyyy")}
                           </p>
-                        ) : null}
-                      </button>
-                    </li>
-                  ))}
+                          <p className="mt-1 text-sm font-semibold text-white">{note.title}</p>
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
@@ -581,10 +645,10 @@ export default function WallCalendar({
       </div>
 
       <NoteDialog
-        open={noteDraft !== null}
+        phase={noteDialogPhase}
         draft={noteDraft ?? { dateIso: "", title: "", description: "" }}
-        onChange={setNoteDraft}
-        onClose={() => setNoteDraft(null)}
+        onChange={(next) => setNoteDraft(next)}
+        onClose={closeNoteDialog}
         onSave={saveDatedNote}
         onDelete={deleteDatedNote}
       />

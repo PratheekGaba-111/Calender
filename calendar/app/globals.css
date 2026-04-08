@@ -24,3 +24,400 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
 }
+
+/* Wall Calendar: Synthwave motion + effects */
+
+.wc-scanlines {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.06),
+    rgba(255, 255, 255, 0.06) 1px,
+    transparent 1px,
+    transparent 4px
+  );
+  background-size: 100% 8px;
+  mix-blend-mode: overlay;
+  animation: wc-scanlines 1600ms linear infinite;
+  opacity: 0.14;
+  pointer-events: none;
+}
+
+@keyframes wc-scanlines {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 0 16px;
+  }
+}
+
+.wc-glitch-jitter {
+  animation: wc-glitch-jitter 320ms steps(2, end) both;
+}
+
+@keyframes wc-glitch-jitter {
+  0% {
+    transform: translate3d(0, 0, 0);
+    filter: hue-rotate(0deg);
+  }
+  20% {
+    transform: translate3d(-1px, 0, 0) skewX(-4deg);
+    filter: hue-rotate(8deg);
+  }
+  40% {
+    transform: translate3d(1px, -1px, 0) skewX(3deg);
+    filter: hue-rotate(-10deg);
+  }
+  60% {
+    transform: translate3d(-1px, 1px, 0) skewX(-2deg);
+    filter: hue-rotate(6deg);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+    filter: hue-rotate(0deg);
+  }
+}
+
+.wc-month-in-next {
+  animation: wc-month-in-next 700ms cubic-bezier(0.0, 0.0, 0.2, 1) both;
+}
+
+.wc-month-out-next {
+  animation: wc-month-out-next 700ms cubic-bezier(0.4, 0.0, 1, 1) both;
+}
+
+.wc-month-in-prev {
+  animation: wc-month-in-prev 700ms cubic-bezier(0.0, 0.0, 0.2, 1) both;
+}
+
+.wc-month-out-prev {
+  animation: wc-month-out-prev 700ms cubic-bezier(0.4, 0.0, 1, 1) both;
+}
+
+.wc-month-in-today {
+  animation: wc-month-in-today 700ms cubic-bezier(0.0, 0.0, 0.2, 1) both;
+}
+
+.wc-month-out-today {
+  animation: wc-month-out-today 700ms cubic-bezier(0.4, 0.0, 1, 1) both;
+}
+
+@keyframes wc-month-in-next {
+  0% {
+    opacity: 0;
+    transform: translate3d(26px, 0, 0) scale(0.99);
+    filter: blur(10px) saturate(1.12);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0) saturate(1);
+  }
+}
+
+@keyframes wc-month-out-next {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0) saturate(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(-26px, 0, 0) scale(0.99);
+    filter: blur(10px) saturate(1.12);
+  }
+}
+
+@keyframes wc-month-in-prev {
+  0% {
+    opacity: 0;
+    transform: translate3d(-26px, 0, 0) scale(0.99);
+    filter: blur(10px) saturate(1.12);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0) saturate(1);
+  }
+}
+
+@keyframes wc-month-out-prev {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0) saturate(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(26px, 0, 0) scale(0.99);
+    filter: blur(10px) saturate(1.12);
+  }
+}
+
+@keyframes wc-month-in-today {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0) scale(0.985);
+    filter: blur(10px) saturate(1.14);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0) saturate(1);
+  }
+}
+
+@keyframes wc-month-out-today {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0) saturate(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, -8px, 0) scale(0.99);
+    filter: blur(10px) saturate(1.12);
+  }
+}
+
+.wc-note-pop {
+  animation: wc-note-pop 650ms ease-out both;
+}
+
+@keyframes wc-note-pop {
+  0% {
+    transform: scale(0.985);
+    box-shadow: 0 0 0 rgba(255, 20, 147, 0), 0 0 0 rgba(0, 255, 255, 0);
+  }
+  45% {
+    transform: scale(1.02);
+    box-shadow: 0 0 18px rgba(255, 20, 147, 0.22), 0 0 26px rgba(0, 255, 255, 0.16);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(255, 20, 147, 0), 0 0 0 rgba(0, 255, 255, 0);
+  }
+}
+
+.wc-note-delete {
+  animation: wc-note-delete 220ms ease-in both;
+}
+
+@keyframes wc-note-delete {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+.wc-today-pulse {
+  border: 1px solid rgba(0, 255, 255, 0.34);
+  box-shadow: 0 0 0 0 rgba(0, 255, 255, 0.22);
+  animation: wc-today-pulse 700ms ease-out both;
+}
+
+@keyframes wc-today-pulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(0, 255, 255, 0.22);
+  }
+  45% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 18px rgba(0, 255, 255, 0.18), 0 0 26px rgba(255, 20, 147, 0.16);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.08);
+    box-shadow: 0 0 26px rgba(0, 255, 255, 0.14), 0 0 38px rgba(255, 20, 147, 0.12);
+  }
+}
+
+.wc-modal-overlay-in {
+  animation: wc-modal-overlay-in 180ms ease-out both;
+}
+
+.wc-modal-overlay-out {
+  animation: wc-modal-overlay-out 200ms ease-in both;
+}
+
+@keyframes wc-modal-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes wc-modal-overlay-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.wc-modal-in {
+  animation: wc-modal-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.wc-modal-out {
+  animation: wc-modal-out 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* Month/Year Picker: Premium popover + sheet */
+
+.wc-picker-overlay-in {
+  animation: wc-picker-overlay-in 160ms ease-out both;
+}
+
+.wc-picker-overlay-out {
+  animation: wc-picker-overlay-out 180ms ease-in both;
+}
+
+@keyframes wc-picker-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes wc-picker-overlay-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.wc-picker-popover-in {
+  transform-origin: top right;
+  animation: wc-picker-popover-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.wc-picker-popover-out {
+  transform-origin: top right;
+  animation: wc-picker-popover-out 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes wc-picker-popover-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -6px, 0) scale(0.985);
+    filter: blur(3px);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes wc-picker-popover-out {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, -6px, 0) scale(0.985);
+    filter: blur(3px);
+  }
+}
+
+.wc-picker-sheet-in {
+  animation: wc-picker-sheet-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.wc-picker-sheet-out {
+  animation: wc-picker-sheet-out 180ms cubic-bezier(0.4, 0.0, 1, 1) both;
+}
+
+@keyframes wc-picker-sheet-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0) scale(0.995);
+    filter: blur(3px);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes wc-picker-sheet-out {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0) scale(0.995);
+    filter: blur(3px);
+  }
+}
+
+@keyframes wc-modal-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.98);
+    filter: blur(3px);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes wc-modal-out {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.98);
+    filter: blur(3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wc-scanlines,
+  .wc-glitch-jitter,
+  .wc-month-in-next,
+  .wc-month-out-next,
+  .wc-month-in-prev,
+  .wc-month-out-prev,
+  .wc-month-in-today,
+  .wc-month-out-today,
+  .wc-note-pop,
+  .wc-note-delete,
+  .wc-today-pulse,
+  .wc-picker-overlay-in,
+  .wc-picker-overlay-out,
+  .wc-picker-popover-in,
+  .wc-picker-popover-out,
+  .wc-picker-sheet-in,
+  .wc-picker-sheet-out,
+  .wc-modal-overlay-in,
+  .wc-modal-overlay-out,
+  .wc-modal-in,
+  .wc-modal-out {
+    animation: none !important;
+  }
+}
